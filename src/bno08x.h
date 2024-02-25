@@ -4,9 +4,6 @@
 #include <Adafruit_BNO08x.h>
 
 #define BNO08x_ADRESS 0x4a
-#define SDA1_PIN 6
-#define SCL1_PIN 7
-#define N_ADR 2
 
 struct Vec3d
 {

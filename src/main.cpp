@@ -1,23 +1,83 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include "bno08x.h"
+#include "bme688.h"
 
 Adafruit_BNO08x bno08x;
+Adafruit_BME680 bme688;
 sh2_SensorValue sensor_value;
 Bno08x_report inertial_report;
+Bme688_report barometer_report;
 
+#define N_ADR 2
+#define SDA0 20
+#define SCL0 21
+#define SDA1 6
+#define SCL1 7
+
+int i2c_scan(int* adr, int adr_size, TwoWire* wire);
+void bme_print_report(Bme688_report report);
 void bno_print_report(Bno08x_report report);
 
 void setup() {
+  int error;
   int adr_count, adress;
   int adr_list[N_ADR];
 
-  Wire1.setSDA(SDA1_PIN);
-  Wire1.setSCL(SCL1_PIN);
+  Wire1.setSDA(SDA1);
+  Wire1.setSCL(SCL1);
   Wire1.begin();
+  Wire.setSDA(SDA0);
+  Wire.setSCL(SCL0);
+  Wire.begin();
 
   Serial.begin(9600);
   while(!Serial);
+  delay(100);
+  
+
+  // I2C0 scan
+  Serial.println("I2C scan: I2C0");
+  do {
+    adr_count = i2c_scan(adr_list, N_ADR, &Wire);
+  } while (adr_count == 0);
+  Serial.print("Number of I2C devices found: ");
+  Serial.println(adr_count);
+  for (int i = 0; i<adr_count; ++i)
+  {
+    Serial.print("Adress of device ");
+    Serial.print(i+1);
+    Serial.print(" :");
+    Serial.println(adr_list[i], HEX);
+  }
+
+  // I2C0 scan
+  Serial.println("I2C scan: I2C1");
+  do {
+    adr_count = i2c_scan(adr_list, N_ADR, &Wire1);
+  } while (adr_count == 0);
+
+  Serial.print("Number of I2C devices found: ");
+  Serial.println(adr_count);
+  for (int i = 0; i<adr_count; ++i)
+  {
+    Serial.print("Adress of device ");
+    Serial.print(i+1);
+    Serial.print(" :");
+    Serial.println(adr_list[i], HEX);
+  }
+
+  bme688 = Adafruit_BME680(&Wire);
+  error = bme688_init(&bme688);
+  Serial.print("bme866_init() error code: ");
+  if (error)
+  {
+    Serial.println(error, HEX);
+  }
+  else
+  {
+    Serial.println("SUCCESS");
+  }
 
   Serial.println("Adafruit BNO08x test.");
   while (!bno08x.begin_I2C(BNO08x_ADRESS, &Wire1))
@@ -29,11 +89,11 @@ void setup() {
 }
 
 void loop() {
-  delay(100);
+  while (!bme688_report(&bme688, &barometer_report))
+    ;
 
   if (bno08x.wasReset())
   {
-    Serial.println("Sensor was reset.");
     bno08x_set_reports(bno08x);
   }
 
@@ -72,20 +132,21 @@ void loop() {
     break;
   }
 
-  bno_print_report(inertial_report);
+  //bno_print_report(inertial_report);
+  //bme_print_report(barometer_report);
 }
 
-int i2c_scan(int* adr, int adr_size)
+int i2c_scan(int* adr, int adr_size, TwoWire* wire)
 {
   int adress, error;
   int n_devices = 0;
 
   for (adress = 1; adress < 127; adress++)
   {
-    Wire1.beginTransmission(adress);
-    error = Wire1.endTransmission();
+    wire->beginTransmission(adress);
+    error = wire->endTransmission();
 
-    if (error == 0  )
+    if (error == 0)
     {
       if (adr && n_devices < adr_size)
         adr[n_devices] = adress;
@@ -139,4 +200,21 @@ void bno_print_report(Bno08x_report report)
   Serial.print("; z: ");
   Serial.print(report.linaccel.z);
   Serial.println(";");
+}
+
+void bme_print_report(Bme688_report report)
+{
+  Serial.println("BME688 report:");
+
+  Serial.print("Temperature (C): ");
+  Serial.println(report.tempC);
+
+  Serial.print("Pressure (Pa): ");
+  Serial.println(report.pressurePa);
+
+  Serial.print("Relative humidity: ");
+  Serial.println(report.relHumidity);
+
+  Serial.print("Altitude (M): ");
+  Serial.println(report.altitudeM);
 }
