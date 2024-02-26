@@ -109,22 +109,18 @@ void setup() {
 }
 
 void loop() {
-  if (bno08x.wasReset())
-    bno08x_set_reports(bno08x);
+  //if (bno08x.wasReset())
+    //bno08x_set_reports(bno08x);
 
-  if (bno08x.getSensorEvent(&sensor_value))
-    bno08x_update_report(&sensor_value, &inertial_report);
+  //if (bno08x.getSensorEvent(&sensor_value))
+    //bno08x_update_report(&sensor_value, &inertial_report);
     //bno_print_report(inertial_report);
 
   if (bme688.performReading())
     bme688_update_report(&bme688, &barometer_report);
     //bme_print_report(barometer_report);
 
-  current_time = millis();
-  if (current_time > flush_time)
-  {
     serial_flush(inertial_report, barometer_report);
-  }
 }
 
 void serial_flush(Bno08x_report inertial, Bme688_report barometer)
