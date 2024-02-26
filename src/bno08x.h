@@ -10,7 +10,7 @@ struct Vec3d
     float x;
     float y;
     float z;
-};
+} __attribute__((packed));
 
 struct Bno08x_report
 {
@@ -18,8 +18,9 @@ struct Bno08x_report
     Vec3d gyro;
     Vec3d magnet;
     Vec3d linaccel;
-};
+} __attribute__((packed));
 
 void bno08x_set_reports(Adafruit_BNO08x bno08x);
+void bno08x_update_report(sh2_SensorValue* sensor_value, Bno08x_report* report);
 
 #endif

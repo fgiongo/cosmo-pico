@@ -27,15 +27,10 @@ int bme688_init(Adafruit_BME680* bme)
 
 }
 
-bool bme688_report(Adafruit_BME680* bme, Bme688_report* report)
+void bme688_update_report(Adafruit_BME680* bme, Bme688_report* report)
 {
-    if(!bme->performReading())
-    {
-        return false;
-    }
     report->tempC = bme->temperature;
     report->pressurePa = bme->pressure;
     report->relHumidity = bme->humidity;
     report->altitudeM = bme->readAltitude(SEALEVEL_PRESSURE_HPA);
-    return true;
 }

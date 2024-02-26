@@ -1,29 +1,41 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <SoftwareSerial.h>
+#include <SerialTransfer.h>
 #include "bno08x.h"
 #include "bme688.h"
-
-Adafruit_BNO08x bno08x;
-Adafruit_BME680 bme688;
-sh2_SensorValue sensor_value;
-Bno08x_report inertial_report;
-Bme688_report barometer_report;
 
 #define N_ADR 2
 #define SDA0 20
 #define SCL0 21
 #define SDA1 6
 #define SCL1 7
+#define SSTX 17
+#define SSRX 37
+
+Adafruit_BNO08x bno08x;
+Adafruit_BME680 bme688;
+sh2_SensorValue sensor_value;
+Bno08x_report inertial_report;
+Bme688_report barometer_report;
+SoftwareSerial softSerial(SSRX, SSTX);
+SerialTransfer serial_transfer;
+bool barometer_success;
+bool inertial_success;
+unsigned long current_time, flush_time;
+
 
 int i2c_scan(int* adr, int adr_size, TwoWire* wire);
 void bme_print_report(Bme688_report report);
 void bno_print_report(Bno08x_report report);
+void serial_flush(Bno08x_report inertial, Bme688_report barometer);
 
 void setup() {
   int error;
   int adr_count, adress;
   int adr_list[N_ADR];
 
+  // Initializing I2C
   Wire1.setSDA(SDA1);
   Wire1.setSCL(SCL1);
   Wire1.begin();
@@ -31,10 +43,17 @@ void setup() {
   Wire.setSCL(SCL0);
   Wire.begin();
 
+  // Initializing hardware serial
   Serial.begin(9600);
   while(!Serial);
   delay(100);
+
+  // Initializing software serial
+  pinMode(SSRX, INPUT);
+  pinMode(SSTX, OUTPUT);
+  softSerial.begin(9600);
   
+  serial_transfer.begin(Serial);
 
   // I2C0 scan
   Serial.println("I2C scan: I2C0");
@@ -51,7 +70,7 @@ void setup() {
     Serial.println(adr_list[i], HEX);
   }
 
-  // I2C0 scan
+  // I2C1 scan
   Serial.println("I2C scan: I2C1");
   do {
     adr_count = i2c_scan(adr_list, N_ADR, &Wire1);
@@ -67,6 +86,7 @@ void setup() {
     Serial.println(adr_list[i], HEX);
   }
 
+  // Initializing Adafruit BME688
   bme688 = Adafruit_BME680(&Wire);
   error = bme688_init(&bme688);
   Serial.print("bme866_init() error code: ");
@@ -79,7 +99,7 @@ void setup() {
     Serial.println("SUCCESS");
   }
 
-  Serial.println("Adafruit BNO08x test.");
+  // Initializing Adafruit BNO08x
   while (!bno08x.begin_I2C(BNO08x_ADRESS, &Wire1))
     ;
 
@@ -89,51 +109,29 @@ void setup() {
 }
 
 void loop() {
-  while (!bme688_report(&bme688, &barometer_report))
-    ;
-
   if (bno08x.wasReset())
-  {
     bno08x_set_reports(bno08x);
-  }
 
-  if (!bno08x.getSensorEvent(&sensor_value))
+  if (bno08x.getSensorEvent(&sensor_value))
+    bno08x_update_report(&sensor_value, &inertial_report);
+    //bno_print_report(inertial_report);
+
+  if (bme688.performReading())
+    bme688_update_report(&bme688, &barometer_report);
+    //bme_print_report(barometer_report);
+
+  current_time = millis();
+  if (current_time > flush_time)
   {
-    return;
+    serial_flush(inertial_report, barometer_report);
   }
+}
 
-  switch (sensor_value.sensorId)
-  {
-  case SH2_ACCELEROMETER:
-    inertial_report.accel.x = sensor_value.un.accelerometer.x;
-    inertial_report.accel.y = sensor_value.un.accelerometer.y;
-    inertial_report.accel.z = sensor_value.un.accelerometer.z;
-    break;
-
-  case SH2_GYROSCOPE_CALIBRATED:
-    inertial_report.gyro.x = sensor_value.un.gyroscope.x;
-    inertial_report.gyro.y = sensor_value.un.gyroscope.y;
-    inertial_report.gyro.z = sensor_value.un.gyroscope.z;
-    break;
-
-  case SH2_MAGNETIC_FIELD_CALIBRATED:
-    inertial_report.magnet.x = sensor_value.un.magneticField.x;
-    inertial_report.magnet.y = sensor_value.un.magneticField.y;
-    inertial_report.magnet.z = sensor_value.un.magneticField.z;
-    break;
-
-  case SH2_LINEAR_ACCELERATION:
-    inertial_report.linaccel.x = sensor_value.un.linearAcceleration.x;
-    inertial_report.linaccel.y = sensor_value.un.linearAcceleration.y;
-    inertial_report.linaccel.z = sensor_value.un.linearAcceleration.z;
-    break;
-
-  default:
-    break;
-  }
-
-  //bno_print_report(inertial_report);
-  //bme_print_report(barometer_report);
+void serial_flush(Bno08x_report inertial, Bme688_report barometer)
+{
+  uint16_t size = 0;
+  size = serial_transfer.txObj(barometer, size);
+  serial_transfer.sendData(size, 0);
 }
 
 int i2c_scan(int* adr, int adr_size, TwoWire* wire)
@@ -199,7 +197,7 @@ void bno_print_report(Bno08x_report report)
   Serial.print(report.linaccel.y);
   Serial.print("; z: ");
   Serial.print(report.linaccel.z);
-  Serial.println(";");
+  Serial.println(";\n");
 }
 
 void bme_print_report(Bme688_report report)
@@ -217,4 +215,5 @@ void bme_print_report(Bme688_report report)
 
   Serial.print("Altitude (M): ");
   Serial.println(report.altitudeM);
+  Serial.println("");
 }

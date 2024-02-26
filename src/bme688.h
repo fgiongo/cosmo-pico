@@ -19,9 +19,9 @@ struct Bme688_report
     float pressurePa;
     float relHumidity;
     float altitudeM;
-};
+} __attribute__((packed));
 
 int bme688_init(Adafruit_BME680* bme);
-bool bme688_report(Adafruit_BME680* bme, Bme688_report* report);
+void bme688_update_report(Adafruit_BME680* bme, Bme688_report* report);
 
 #endif
