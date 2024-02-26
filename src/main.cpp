@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <SoftwareSerial.h>
 #include <SerialTransfer.h>
+#include <time.h>
 #include "bno08x.h"
 #include "bme688.h"
 
@@ -22,13 +23,15 @@ SoftwareSerial softSerial(SSRX, SSTX);
 SerialTransfer serial_transfer;
 bool barometer_success;
 bool inertial_success;
-unsigned long current_time, flush_time;
+unsigned long current_time;
+unsigned long last_tick = 0;
 
 
 int i2c_scan(int* adr, int adr_size, TwoWire* wire);
 void bme_print_report(Bme688_report report);
 void bno_print_report(Bno08x_report report);
-void serial_flush(Bno08x_report inertial, Bme688_report barometer);
+void serial_flush(Bno08x_report report);
+void serial_flush(Bme688_report report);
 
 void setup() {
   int error;
@@ -109,24 +112,50 @@ void setup() {
 }
 
 void loop() {
-  //if (bno08x.wasReset())
-    //bno08x_set_reports(bno08x);
+  current_time = millis();
 
-  //if (bno08x.getSensorEvent(&sensor_value))
-    //bno08x_update_report(&sensor_value, &inertial_report);
-    //bno_print_report(inertial_report);
+  if (bno08x.wasReset())
+    bno08x_set_reports(bno08x);
 
-  if (bme688.performReading())
+  if (bno08x.getSensorEvent(&sensor_value))
+    bno08x_update_report(&sensor_value, &inertial_report);
+
+  if (bme688.remainingReadingMillis() == -1)
+  {
+    bme688.beginReading();
+  }
+  else if (bme688.remainingReadingMillis() == 0)
+  {
+    bme688.endReading();
     bme688_update_report(&bme688, &barometer_report);
-    //bme_print_report(barometer_report);
+    serial_flush(barometer_report);
+  }
 
-    serial_flush(inertial_report, barometer_report);
+  if(current_time - last_tick > 100)
+  {
+    Serial.println(current_time - last_tick);
+    last_tick = current_time;
+
+    if (bme688.remainingReadingMillis() == -1)
+    {
+      serial_flush(barometer_report);
+    }
+
+    serial_flush(inertial_report);
+  }
 }
 
-void serial_flush(Bno08x_report inertial, Bme688_report barometer)
+void serial_flush(Bno08x_report report)
 {
   uint16_t size = 0;
-  size = serial_transfer.txObj(barometer, size);
+  size = serial_transfer.txObj(report, size);
+  serial_transfer.sendData(size, 0);
+}
+
+void serial_flush(Bme688_report report)
+{
+  uint16_t size = 0;
+  size = serial_transfer.txObj(report, size);
   serial_transfer.sendData(size, 0);
 }
 
@@ -208,8 +237,4 @@ void bme_print_report(Bme688_report report)
 
   Serial.print("Relative humidity: ");
   Serial.println(report.relHumidity);
-
-  Serial.print("Altitude (M): ");
-  Serial.println(report.altitudeM);
-  Serial.println("");
 }

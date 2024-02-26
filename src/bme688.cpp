@@ -10,6 +10,7 @@ int bme688_init(Adafruit_BME680* bme)
     {
         return ERROR_BME688_INIT;
     }
+
     if (!bme->setTemperatureOversampling(BME68X_OS_1X))
     {
         error |= ERROR_BME688_OVERSAMPLING_TEMP;
