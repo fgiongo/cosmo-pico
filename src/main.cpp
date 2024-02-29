@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <SoftwareSerial.h>
 #include <SerialTransfer.h>
 #include <time.h>
 #include "bno08x.h"
@@ -11,27 +10,27 @@
 #define SCL0 21
 #define SDA1 6
 #define SCL1 7
-#define SSTX 17
-#define SSRX 37
+#define BNO08X_SERIAL_ID 0
+#define BME688_SERIAL_ID 1
+#define BUFSIZE 32
 
 Adafruit_BNO08x bno08x;
 Adafruit_BME680 bme688;
 sh2_SensorValue sensor_value;
 Bno08x_report inertial_report;
 Bme688_report barometer_report;
-SoftwareSerial softSerial(SSRX, SSTX);
-SerialTransfer serial_transfer;
-bool barometer_success;
-bool inertial_success;
 unsigned long current_time;
 unsigned long last_tick = 0;
+char buffer[BUFSIZE];
 
 
+String bme688_tostring(Bme688_report &report);
+String bno08x_tostring(Bno08x_report& report);
 int i2c_scan(int* adr, int adr_size, TwoWire* wire);
 void bme_print_report(Bme688_report report);
 void bno_print_report(Bno08x_report report);
-void serial_flush(Bno08x_report report);
-void serial_flush(Bme688_report report);
+void serial_flush(Bno08x_report report, int id);
+void serial_flush(Bme688_report report, int id);
 
 void setup() {
   int error;
@@ -48,15 +47,12 @@ void setup() {
 
   // Initializing hardware serial
   Serial.begin(9600);
-  while(!Serial);
-  delay(100);
-
-  // Initializing software serial
-  pinMode(SSRX, INPUT);
-  pinMode(SSTX, OUTPUT);
-  softSerial.begin(9600);
-  
-  serial_transfer.begin(Serial);
+  while (!Serial)
+    ;
+  Serial1.begin(9600); // Pin 1
+  while (!Serial1)
+    ;
+  delay(1000);
 
   // I2C0 scan
   Serial.println("I2C scan: I2C0");
@@ -128,35 +124,69 @@ void loop() {
   {
     bme688.endReading();
     bme688_update_report(&bme688, &barometer_report);
-    serial_flush(barometer_report);
+    Serial1.print(bme688_tostring(barometer_report));
   }
 
-  if(current_time - last_tick > 100)
+  if (current_time - last_tick > 100)
   {
-    Serial.println(current_time - last_tick);
-    last_tick = current_time;
-
-    if (bme688.remainingReadingMillis() == -1)
+    if (Serial1.available() > 7)
     {
-      serial_flush(barometer_report);
+      Serial1.println(Serial1.readStringUntil('\n'));
     }
 
-    serial_flush(inertial_report);
+    last_tick = current_time;
+    Serial1.print(bno08x_tostring(inertial_report));
   }
 }
 
-void serial_flush(Bno08x_report report)
+String bme688_tostring(Bme688_report& report)
 {
-  uint16_t size = 0;
-  size = serial_transfer.txObj(report, size);
-  serial_transfer.sendData(size, 0);
+  String out;
+  out += "BME688,";
+  out += report.tempC;
+  out += ",";
+  out += report.pressurePa;
+  out += ",";
+  out += report.relHumidity;
+  out += "\n";
+
+  return out;
 }
 
-void serial_flush(Bme688_report report)
+String bno08x_tostring(Bno08x_report& report)
 {
-  uint16_t size = 0;
-  size = serial_transfer.txObj(report, size);
-  serial_transfer.sendData(size, 0);
+  String out;
+  out += "BNO08x,";
+
+  out += report.accel.x;
+  out += ",";
+  out += report.accel.y;
+  out += ",";
+  out += report.accel.z;
+  out += ",";
+
+  out += report.gyro.x;
+  out += ",";
+  out += report.gyro.y;
+  out += ",";
+  out += report.gyro.z;
+  out += ",";
+
+  out += report.linaccel.x;
+  out += ",";
+  out += report.linaccel.y;
+  out += ",";
+  out += report.linaccel.z;
+  out += ",";
+
+  out += report.magnet.x;
+  out += ",";
+  out += report.magnet.y;
+  out += ",";
+  out += report.magnet.z;
+  out += "\n";
+
+  return out;
 }
 
 int i2c_scan(int* adr, int adr_size, TwoWire* wire)
@@ -183,58 +213,4 @@ int i2c_scan(int* adr, int adr_size, TwoWire* wire)
   }
 
   return n_devices;
-}
-
-void bno_print_report(Bno08x_report report)
-{
-  Serial.println("BNO08x report:");
-  Serial.println("Acceleration:");
-  Serial.print("x: ");
-  Serial.print(report.accel.x);
-  Serial.print("; y: ");
-  Serial.print(report.accel.y);
-  Serial.print("; z: ");
-  Serial.print(report.accel.z);
-  Serial.println(";");
-
-  Serial.println("Gyro:");
-  Serial.print("x: ");
-  Serial.print(report.gyro.x);
-  Serial.print("; y: ");
-  Serial.print(report.gyro.y);
-  Serial.print("; z: ");
-  Serial.print(report.gyro.z);
-  Serial.println(";");
-
-  Serial.println("Magnetic Field Strength:");
-  Serial.print("x: ");
-  Serial.print(report.magnet.x);
-  Serial.print("; y: ");
-  Serial.print(report.magnet.y);
-  Serial.print("; z: ");
-  Serial.print(report.magnet.z);
-  Serial.println(";");
-
-  Serial.println("Linear Acceleration:");
-  Serial.print("x: ");
-  Serial.print(report.linaccel.x);
-  Serial.print("; y: ");
-  Serial.print(report.linaccel.y);
-  Serial.print("; z: ");
-  Serial.print(report.linaccel.z);
-  Serial.println(";\n");
-}
-
-void bme_print_report(Bme688_report report)
-{
-  Serial.println("BME688 report:");
-
-  Serial.print("Temperature (C): ");
-  Serial.println(report.tempC);
-
-  Serial.print("Pressure (Pa): ");
-  Serial.println(report.pressurePa);
-
-  Serial.print("Relative humidity: ");
-  Serial.println(report.relHumidity);
 }
