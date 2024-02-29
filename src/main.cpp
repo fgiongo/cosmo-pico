@@ -21,7 +21,7 @@ Bno08x_report inertial_report;
 Bme688_report barometer_report;
 unsigned long current_time;
 unsigned long last_tick = 0;
-char buffer[BUFSIZE];
+String buffer;
 
 
 String bme688_tostring(Bme688_report &report);
@@ -54,6 +54,7 @@ void setup() {
     ;
   delay(1000);
 
+  /*
   // I2C0 scan
   Serial.println("I2C scan: I2C0");
   do {
@@ -70,6 +71,7 @@ void setup() {
   }
 
   // I2C1 scan
+  
   Serial.println("I2C scan: I2C1");
   do {
     adr_count = i2c_scan(adr_list, N_ADR, &Wire1);
@@ -84,6 +86,7 @@ void setup() {
     Serial.print(" :");
     Serial.println(adr_list[i], HEX);
   }
+  */
 
   // Initializing Adafruit BME688
   bme688 = Adafruit_BME680(&Wire);
@@ -98,6 +101,7 @@ void setup() {
     Serial.println("SUCCESS");
   }
 
+  /*
   // Initializing Adafruit BNO08x
   while (!bno08x.begin_I2C(BNO08x_ADRESS, &Wire1))
     ;
@@ -105,16 +109,19 @@ void setup() {
   Serial.println("BNO08x found.");
 
   bno08x_set_reports(bno08x);
+  */
 }
 
 void loop() {
   current_time = millis();
 
+  /*
   if (bno08x.wasReset())
     bno08x_set_reports(bno08x);
 
   if (bno08x.getSensorEvent(&sensor_value))
     bno08x_update_report(&sensor_value, &inertial_report);
+  */
 
   if (bme688.remainingReadingMillis() == -1)
   {
@@ -131,11 +138,13 @@ void loop() {
   {
     if (Serial1.available() > 7)
     {
-      Serial1.println(Serial1.readStringUntil('\n'));
+      buffer = Serial1.readStringUntil('\n');
+      Serial1.println(buffer);
+      Serial.println(buffer);
     }
 
     last_tick = current_time;
-    Serial1.print(bno08x_tostring(inertial_report));
+    //Serial1.print(bno08x_tostring(inertial_report));
   }
 }
 
